@@ -56,8 +56,6 @@ func (s *Service) Publish(id int64) (*model.GuidelineVersion, error) {
 	case model.GuidelineDraft:
 	case model.GuidelineAmbiguous:
 		// 澄清歧义后可重新发布为已发布。
-	case model.GuidelineRevoked:
-		// 允许已废止版本重新发布，造成历史版本状态回流。
 	default:
 		return nil, fmt.Errorf("%w: cannot publish version in %q", model.ErrInvalidState, v.Status)
 	}
