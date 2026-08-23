@@ -20,8 +20,8 @@ type MergeResult struct {
 // Merger 按片段归并标注：同层标签一致则片段标记 consistent，
 // 出现多个标签则创建分歧并标记 disputed。
 type Merger struct {
-	spans   *store.CorpusStore
-	anns    *store.AnnotationStore
+	spans    *store.CorpusStore
+	anns     *store.AnnotationStore
 	disputes *store.DisputeStore
 }
 
@@ -36,10 +36,19 @@ func (m *Merger) MergeSpan(spanID int64, layer model.Layer) (*MergeResult, error
 	if err != nil {
 		return nil, err
 	}
-	labelGroups := map[string]int{}
+	labelGroups := map[string]int{} // 标签 → 去重后的标注员数
+	labelVoters := map[string]map[string]struct{}{}
 	annotators := []string{}
 	for _, a := range anns {
-		labelGroups[a.Label]++
+		voters, ok := labelVoters[a.Label]
+		if !ok {
+			voters = map[string]struct{}{}
+			labelVoters[a.Label] = voters
+		}
+		if _, dup := voters[a.Annotator]; !dup {
+			voters[a.Annotator] = struct{}{}
+			labelGroups[a.Label]++
+		}
 		annotators = appendUnique(annotators, a.Annotator)
 	}
 	res := &MergeResult{
@@ -77,16 +86,17 @@ func (m *Merger) MergeSpan(spanID int64, layer model.Layer) (*MergeResult, error
 	}
 	res.DisputeID = dispute.ID
 
-	// 重建矩阵条目。
-	for label, count := range labelGroups {
+	// 重建矩阵条目。每个标签按标注员去重计票，避免同一标注员跨版本/重审
+	// 产生多条标注行时被重复计入。
+	for label := range labelGroups {
 		who := []string{}
 		for _, a := range anns {
 			if a.Label == label {
-				who = append(who, a.Annotator)
+				who = appendUnique(who, a.Annotator)
 			}
 		}
 		if err := m.disputes.UpsertMatrixEntry(model.MatrixEntry{
-			Label: label, Annotators: who, VoteCount: count,
+			Label: label, Annotators: who, VoteCount: len(who),
 		}, dispute.ID); err != nil {
 			return nil, err
 		}

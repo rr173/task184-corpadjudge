@@ -56,8 +56,8 @@ func (s *Service) Matrix(disputeID int64) ([]model.MatrixEntry, error) {
 			byLabel[a.Label] = e
 			order = append(order, a.Label)
 		}
-		e.VoteCount++
 		e.Annotators = appendUnique(e.Annotators, a.Annotator)
+		e.VoteCount = len(e.Annotators) // 按标注员去重计票，避免跨版本/重审重复行造成重复计数
 	}
 	out := make([]model.MatrixEntry, 0, len(order))
 	for _, label := range order {

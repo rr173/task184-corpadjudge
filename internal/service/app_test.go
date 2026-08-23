@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"task184-corpadjudge/internal/dispute"
 	"task184-corpadjudge/internal/model"
 	"task184-corpadjudge/internal/store"
 )
@@ -126,6 +127,59 @@ func TestCrossLayerGuard(t *testing.T) {
 	// 同一标注员再标指代层 → 应被互斥规则拒绝。
 	if _, _, err := app.Workflow(sp.ID, "ann", model.LayerCoref, "X", 0, 2, v.ID); err == nil {
 		t.Fatal("expected cross-layer guard to reject")
+	}
+}
+
+// TestMatrixDedupsAnnotatorAcrossVersions 同一标注员在两个准则版本下提交相同
+// 标签（vote_key 不同 → 两条 submitted 标注行）时，分歧矩阵与汇总不得把该标注员
+// 重复计入票数与人数。
+func TestMatrixDedupsAnnotatorAcrossVersions(t *testing.T) {
+	app := newTestApp(t)
+
+	v1, _ := app.Guideline.CreateVersion("准则A", "", "")
+	if _, err := app.Guideline.Publish(v1.ID); err != nil {
+		t.Fatal(err)
+	}
+	sp, err := app.Corpus.Create("doc1", 0, 4, "测试文本", model.LayerPOS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 两位标注员两种标签 → 分歧。
+	if _, _, err := app.Workflow(sp.ID, "ann-a", model.LayerPOS, "V", 0, 2, v1.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := app.Workflow(sp.ID, "ann-b", model.LayerPOS, "N", 0, 2, v1.ID); err != nil {
+		t.Fatal(err)
+	}
+	// ann-a 在新版本下再次提交同标签：vote_key 不同 → 产生第二条 submitted 行。
+	v2, _ := app.Guideline.CreateVersion("准则A更新", "", "")
+	if _, err := app.Guideline.Publish(v2.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := app.Workflow(sp.ID, "ann-a", model.LayerPOS, "V", 0, 2, v2.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	disputes, err := app.Dispute.List(sp.ID, 10, 0)
+	if err != nil || len(disputes) != 1 {
+		t.Fatalf("expected 1 dispute, got %d (err=%v)", len(disputes), err)
+	}
+	matrix, err := app.Dispute.Matrix(disputes[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 每个标签的 VoteCount 应等于去重后的标注员数，而非标注行数。
+	for _, e := range matrix {
+		if e.Label == "V" && e.VoteCount != 1 {
+			t.Fatalf("V VoteCount=%d want 1 (ann-a deduped)", e.VoteCount)
+		}
+	}
+	sum := dispute.Summarize(matrix)
+	if sum.DistinctAnnotators != 2 {
+		t.Fatalf("DistinctAnnotators=%d want 2", sum.DistinctAnnotators)
+	}
+	if sum.TotalVotes != 2 {
+		t.Fatalf("TotalVotes=%d want 2", sum.TotalVotes)
 	}
 }
 

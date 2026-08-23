@@ -27,15 +27,25 @@ type LabelRank struct {
 }
 
 // Summarize 从矩阵条目计算汇总统计。
+//
+// 统计一律按标注员去重：同一标注员可能在跨准则版本、重审等场景下产生多条
+// 标注行。这里以标注员为统计单位——每个标签内同一标注员只计一票（条目内去重），
+// 跨标签也只计一次人头（DistinctAnnotators 全局去重）。TotalVotes 取各标签
+// 去重票数之和，与 LeadVotes 同口径，保证多数判定阈值一致。
 func Summarize(entries []model.MatrixEntry) MatrixSummary {
 	sum := MatrixSummary{}
-	// 汇总票数与标签排名，标注员去重在展示层完成。
+	seen := map[string]struct{}{}
 	for _, e := range entries {
 		sum.LabelCount++
-		sum.TotalVotes += e.VoteCount
-		sum.DistinctAnnotators += len(e.Annotators)
-		sum.Ranks = append(sum.Ranks, LabelRank{Label: e.Label, Votes: e.VoteCount, Annotators: e.Annotators})
+		entryAnnotators := dedupStrings(e.Annotators) // 条目内去重，防重复行
+		for _, a := range entryAnnotators {
+			seen[a] = struct{}{} // 跨条目去重人头
+		}
+		votes := len(entryAnnotators)
+		sum.TotalVotes += votes
+		sum.Ranks = append(sum.Ranks, LabelRank{Label: e.Label, Votes: votes, Annotators: entryAnnotators})
 	}
+	sum.DistinctAnnotators = len(seen)
 	sort.Slice(sum.Ranks, func(i, j int) bool { return sum.Ranks[i].Votes > sum.Ranks[j].Votes })
 	if len(sum.Ranks) > 0 {
 		sum.LeadingLabel = sum.Ranks[0].Label
@@ -46,6 +56,23 @@ func Summarize(entries []model.MatrixEntry) MatrixSummary {
 		sum.Majority = sum.LeadVotes >= sum.Threshold
 	}
 	return sum
+}
+
+// dedupStrings 去重并保留首次出现顺序。
+func dedupStrings(in []string) []string {
+	if len(in) == 0 {
+		return in
+	}
+	out := make([]string, 0, len(in))
+	seen := map[string]struct{}{}
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 // DecideMajorityLabel 返回多数标签；若无一过半则返回空串与 false。
