@@ -12,7 +12,7 @@ type MatrixSummary struct {
 	LabelCount         int         `json:"label_count"`
 	TotalVotes         int         `json:"total_votes"`
 	DistinctAnnotators int         `json:"distinct_annotators"`
-	LeadingLabel       string      `json:"leading_label"` // 票数最高的标签
+	LeadingLabel       string      `json:"leading_label"` // 票数最高标签；并列时取字母序最小者
 	LeadVotes          int         `json:"lead_votes"`
 	Majority           bool        `json:"majority"`  // 是否有标签过半
 	Threshold          int         `json:"threshold"` // 过半阈值（总票数/2+1）
@@ -35,12 +35,9 @@ func Summarize(entries []model.MatrixEntry) MatrixSummary {
 		sum.DistinctAnnotators += len(e.Annotators)
 		sum.Ranks = append(sum.Ranks, LabelRank{Label: e.Label, Votes: e.VoteCount, Annotators: e.Annotators})
 	}
-	sort.Slice(sum.Ranks, func(i, j int) bool {
-		if sum.Ranks[i].Votes == sum.Ranks[j].Votes {
-			return sum.Ranks[i].Label > sum.Ranks[j].Label
-		}
-		return sum.Ranks[i].Votes > sum.Ranks[j].Votes
-	})
+	// 票数降序为第一序；票数并列时按标签字母升序稳定排序，
+	// 确保并列标签以稳定、可复现的顺序返回，且首位始终一致。
+	RankLabels(sum.Ranks)
 	if len(sum.Ranks) > 0 {
 		sum.LeadingLabel = sum.Ranks[0].Label
 		sum.LeadVotes = sum.Ranks[0].Votes
@@ -58,6 +55,29 @@ func DecideMajorityLabel(sum MatrixSummary) (string, bool) {
 		return sum.LeadingLabel, true
 	}
 	return "", false
+}
+
+// RankMatrixEntries 原地稳定排序分歧矩阵条目：票数降序为第一序，
+// 票数并列时按标签字母升序。稳定排序保证并列标签以确定顺序返回，
+// 票数并列时首位始终为字母序最小的标签。
+func RankMatrixEntries(entries []model.MatrixEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].VoteCount == entries[j].VoteCount {
+			return entries[i].Label < entries[j].Label
+		}
+		return entries[i].VoteCount > entries[j].VoteCount
+	})
+}
+
+// RankLabels 原地稳定排序标签排名：票数降序为第一序，
+// 票数并列时按标签字母升序。语义同 RankMatrixEntries。
+func RankLabels(ranks []LabelRank) {
+	sort.SliceStable(ranks, func(i, j int) bool {
+		if ranks[i].Votes == ranks[j].Votes {
+			return ranks[i].Label < ranks[j].Label
+		}
+		return ranks[i].Votes > ranks[j].Votes
+	})
 }
 
 // ByLayer 按层拆分矩阵条目（用于跨层展示）。

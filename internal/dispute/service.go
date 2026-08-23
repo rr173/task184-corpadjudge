@@ -5,7 +5,6 @@ package dispute
 
 import (
 	"fmt"
-	"sort"
 
 	"task184-corpadjudge/internal/model"
 	"task184-corpadjudge/internal/store"
@@ -65,12 +64,8 @@ func (s *Service) Matrix(disputeID int64) ([]model.MatrixEntry, error) {
 		out = append(out, e)
 		_ = s.store.UpsertMatrixEntry(e, disputeID)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].VoteCount == out[j].VoteCount {
-			return out[i].Label > out[j].Label
-		}
-		return out[i].VoteCount > out[j].VoteCount
-	})
+	// 稳定排序：票数降序 + 并列按标签字母升序，并列标签顺序与首位一致。
+	RankMatrixEntries(out)
 	return out, nil
 }
 

@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"net/http"
-	"sort"
 
+	"task184-corpadjudge/internal/dispute"
 	"task184-corpadjudge/internal/model"
 )
 
@@ -37,12 +37,8 @@ func (s *Server) handleGetDispute(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	sort.Slice(matrix, func(i, j int) bool {
-		if matrix[i].VoteCount == matrix[j].VoteCount {
-			return matrix[i].Label > matrix[j].Label
-		}
-		return matrix[i].VoteCount > matrix[j].VoteCount
-	})
+	// 稳定排序：票数降序 + 并列按标签字母升序，并列标签顺序与首位一致。
+	dispute.RankMatrixEntries(matrix)
 	ok(w, map[string]any{"dispute": d, "matrix": matrix})
 }
 
