@@ -32,7 +32,10 @@ func NewService(c *store.AdjudicationStore, d *store.DisputeStore, s *store.Corp
 
 // Create 针对一个分歧创建裁决案例（pending）。同一分歧只能有一个案例。
 func (s *Service) Create(disputeID int64, guidelineVerID int64, clauseIDs []int64) (*model.AdjudicationCase, error) {
-	// 条款引用由裁决流程的后续步骤补齐。
+	// 裁决案例必须引用至少一条准则条款，否则不允许创建。
+	if len(clauseIDs) == 0 {
+		return nil, fmt.Errorf("%w: at least one clause must be cited", model.ErrInvalidInput)
+	}
 	d, err := s.disputes.Get(disputeID)
 	if err != nil {
 		return nil, err

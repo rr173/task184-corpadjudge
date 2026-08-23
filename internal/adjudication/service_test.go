@@ -22,3 +22,15 @@ func TestCompileRuleAndSnapshotableGuards(t *testing.T) {
 		t.Fatalf("bound case error=%v, want ErrDuplicate", err)
 	}
 }
+
+// TestCreateRejectsNoClauses 裁决案例在未引用任何准则条款时不应被创建。
+// 条款校验先于任何 store 访问，故空条款直接返回 ErrInvalidInput。
+func TestCreateRejectsNoClauses(t *testing.T) {
+	svc := &Service{}
+	for _, clauses := range [][]int64{nil, {}} {
+		_, err := svc.Create(1, 1, clauses)
+		if !errors.Is(err, model.ErrInvalidInput) {
+			t.Fatalf("create with clauses=%v: err=%v, want ErrInvalidInput", clauses, err)
+		}
+	}
+}
