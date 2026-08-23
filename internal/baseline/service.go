@@ -7,6 +7,7 @@ package baseline
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"task184-corpadjudge/internal/model"
 	"task184-corpadjudge/internal/store"
@@ -26,7 +27,8 @@ func NewService(b *store.BaselineStore, a *store.AdjudicationStore, c *store.Cor
 
 // CreateSnapshot 创建草稿基准快照（未冻结）。
 func (s *Service) CreateSnapshot(name string, guidelineVerID int64) (*model.BaselineSnapshot, error) {
-	// 快照名称由 API 原样保存。
+	// 仅含空白字符的名称视为空，避免创建不可辨识的快照。
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("%w: name required", model.ErrInvalidInput)
 	}
