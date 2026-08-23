@@ -88,7 +88,7 @@ func VoteKey(annotator string, spanID int64, layer model.Layer, label string, ve
 	return fmt.Sprintf("%s:%d:%s:%s:%d", annotator, spanID, layer, label, versionID)
 }
 
-// validate 校验标注入参：标注员非空、层合法、标签非空、边界合法。
+// validate 校验标注入参：标注员非空、层合法、标签非空、片段未冻结、边界合法。
 func (s *Service) validate(spanID int64, annotator string, layer model.Layer, label string, start, end int) error {
 	annotator = strings.TrimSpace(annotator)
 	if annotator == "" {
@@ -104,7 +104,11 @@ func (s *Service) validate(spanID int64, annotator string, layer model.Layer, la
 	if err != nil {
 		return err
 	}
-	// 草稿更新沿用片段边界校验，冻结状态由上层工作流负责。
+	// 已冻结片段不可再创建或改写草稿标注：冻结即定型，标注须保持快照时的状态。
+	// 此前该守卫被推迟到"上层工作流"，但无人实现，导致冻结后草稿仍可被 PATCH 改写。
+	if sp.Status == model.SpanFrozen {
+		return fmt.Errorf("%w: span %d is frozen", model.ErrFrozen, spanID)
+	}
 	// 越界边界拒绝：标签边界必须落在片段内部。
 	if start < sp.StartOffset || end > sp.EndOffset || end <= start {
 		return fmt.Errorf("%w: label offsets [%d,%d) outside span [%d,%d)",
