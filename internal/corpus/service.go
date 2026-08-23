@@ -44,10 +44,7 @@ func (s *Service) Create(docID string, start, end int, text string, layer model.
 	}
 	fp := Fingerprint(docID, start, end, text)
 	if existing, err := s.store.GetSpanByFingerprint(fp); err == nil {
-		if existing.Status == model.SpanFrozen {
-			return nil, model.ErrDuplicate
-		}
-		return existing, nil // 幂等：重复提交返回既有片段
+		return existing, nil // 幂等：重复提交（含冻结后）返回既有片段
 	}
 	now := store.Now()
 	sp := &model.CorpusSpan{

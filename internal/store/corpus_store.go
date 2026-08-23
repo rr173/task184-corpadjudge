@@ -51,12 +51,13 @@ func (s *CorpusStore) GetSpan(id int64) (*model.CorpusSpan, error) {
 }
 
 // GetSpanByFingerprint 按指纹读取片段（用于幂等）。
+// 不按状态过滤：冻结后的片段仍是幂等查找的目标，重复提交应返回原片段而非冲突。
 func (s *CorpusStore) GetSpanByFingerprint(fp string) (*model.CorpusSpan, error) {
 	var sp model.CorpusSpan
 	var frozen sql.NullString
 	err := s.db.sql.QueryRow(`
 		SELECT id, doc_id, start_offset, end_offset, text, fingerprint, layer, status, created_at, updated_at, frozen_at
-		FROM corpus_spans WHERE fingerprint = ? AND status <> 'frozen'`, fp).
+		FROM corpus_spans WHERE fingerprint = ?`, fp).
 		Scan(&sp.ID, &sp.DocID, &sp.StartOffset, &sp.EndOffset, &sp.Text, &sp.Fingerprint, &sp.Layer,
 			&sp.Status, &sp.CreatedAt, &sp.UpdatedAt, &frozen)
 	if errors.Is(err, sql.ErrNoRows) {
