@@ -126,13 +126,14 @@ func (s *AnnotationStore) ListBySpan(spanID int64, layer string) ([]model.Annota
 	return out, rows.Err()
 }
 
-// ListSubmitted 列出某片段某层已提交标注。
+// ListSubmitted 列出某片段某层参与归并的标注：已提交、被采纳、被驳回、待重审。
+// 草稿（draft）尚未提交，不计入归并，故显式排除，避免未提交草稿污染片段状态。
 func (s *AnnotationStore) ListSubmitted(spanID int64, layer string) ([]model.Annotation, error) {
 	rows, err := s.db.sql.Query(`
 		SELECT id, span_id, annotator, layer, label, start_offset, end_offset,
 			guideline_version_id, status, vote_key, submitted_at, decided_at
 	FROM annotations WHERE span_id = ? AND layer = ? AND status IN (?, ?, ?, ?) ORDER BY id`,
-		spanID, layer, model.AnnDraft, model.AnnSubmitted, model.AnnAccepted, model.AnnRejected)
+		spanID, layer, model.AnnSubmitted, model.AnnAccepted, model.AnnRejected, model.AnnRereview)
 	if err != nil {
 		return nil, err
 	}

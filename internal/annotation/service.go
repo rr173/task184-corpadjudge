@@ -80,7 +80,7 @@ func (s *Service) ListBySpan(spanID int64, layer string) ([]model.Annotation, er
 	return s.anns.ListBySpan(spanID, layer)
 }
 
-// ListSubmitted 返回参与归并的标注。
+// ListSubmitted 返回参与归并的标注（已提交及以上，排除未提交草稿）。
 func (s *Service) ListSubmitted(spanID int64, layer string) ([]model.Annotation, error) {
 	return s.anns.ListSubmitted(spanID, layer)
 }
