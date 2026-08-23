@@ -79,14 +79,16 @@ func (ia *ImpactAnalyzer) Analyze(fromID, toID int64) (*ImpactReport, error) {
 		fromByNo[c.ClauseNo] = c
 	}
 
-	// 条款差异：新增 / 改写 / 废止。
+	// 条款差异：新增 / 改写 / 废止。改写须同时覆盖正文与作用域：
+	// 仅作用域变化、正文相同的条款同样构成语义改写，漏报会使引用它的
+	// 案例被排除出变更清单。
 	for _, c := range toClauses {
 		old, ok := fromByNo[c.ClauseNo]
 		if !ok {
 			report.ChangedClauses = append(report.ChangedClauses, ChangedClause{c.ClauseNo, c.Layer, c.Title, "added"})
 			continue
 		}
-		if old.Body != c.Body {
+		if old.Body != c.Body || old.Scope != c.Scope {
 			report.ChangedClauses = append(report.ChangedClauses, ChangedClause{c.ClauseNo, c.Layer, c.Title, "rewritten"})
 		}
 	}
