@@ -76,8 +76,11 @@ func (r *Rereview) Resolve(id int64, note string, newLabel string, newCaseID int
 		return nil, fmt.Errorf("%w: open rereview task %d not found", model.ErrNotFound, id)
 	}
 	if newLabel != "" && newCaseID > 0 {
-		// 新决定的案例 ID 由调用方保证有效。
-		// 新决定已生成：标记旧案例已替代。
+		// 新决定已生成：校验替换案例确实存在，再标记旧案例已替代。
+		// 若替换案例不存在，绝不能关闭重审任务——否则旧决定被丢弃而无新决定接替。
+		if _, err := r.astore.Get(newCaseID); err != nil {
+			return nil, fmt.Errorf("%w: replacement case %d not found", model.ErrNotFound, newCaseID)
+		}
 		if err := r.astore.MarkSuperseded(task.CaseID); err != nil {
 			return nil, err
 		}
